@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Tesla Autopilot Vision - Seatback Display</title>
+    <!-- Vue 3 Local Offline Bundle -->
+    <script src="vue.global.prod.js"></script>
+    <style>
+        :root {
+            --bg-dark: #070b14;
+            --card-bg: rgba(14, 20, 34, 0.92);
+            --card-border: rgba(255, 255, 255, 0.10);
+            --accent-cyan: #38bdf8;
+            --accent-green: #10b981;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            width: 1024px;
+            height: 576px;
+            background: var(--bg-dark);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #app {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background: var(--bg-dark);
+        }
+
+        /* Top Header Bar */
+        .top-bar {
+            height: 54px;
+            background: rgba(10, 15, 26, 0.95);
+            backdrop-filter: blur(14px);
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 50;
+            flex-shrink: 0;
+        }
+
+        .brand-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 16px;
+            font-weight: 900;
+            letter-spacing: 0.8px;
+        }
+
+        .brand-box span.accent {
+            color: var(--accent-cyan);
+        }
+
+        .live-dot {
+            width: 10px;
+            height: 10px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            box-shadow: 0 0 12px var(--accent-green);
+            animation: pulseRec 1.4s infinite alternate;
+        }
+
+        @keyframes pulseRec {
+            0% { transform: scale(0.85); opacity: 0.6; }
+            100% { transform: scale(1.2); opacity: 1; }
+        }
+
+        .header-pills {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pill {
+            font-size: 12px;
+            font-weight: 800;
+            padding: 6px 14px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--card-border);
+            color: var(--text-muted);
+        }
+
+        .pill.cyan {
+            color: var(--accent-cyan);
+            background: rgba(56, 189, 248, 0.12);
+            border-color: rgba(56, 189, 248, 0.35);
+        }
+
+        .pill.green {
+            color: var(--accent-green);
+            background: rgba(16, 185, 129, 0.12);
+            border-color: rgba(16, 185, 129, 0.35);
+        }
+
+        /* 3D FSD Perspective Viewport */
+        .fsd-viewport {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(ellipse at 50% 20%, #0b1428 0%, #040710 100%);
+            z-index: 2;
+        }
+
+        /* 3D Canvas Layer */
+        #road-3d-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Turn-By-Turn Direction Banner */
+        .turn-banner {
+            position: absolute;
+            top: 16px;
+            left: 20px;
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 10px 18px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+            z-index: 50;
+        }
+
+        .turn-icon {
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(135deg, #0284c7, #0369a1);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #ffffff;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+        }
+
+        .turn-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .turn-dist {
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--accent-cyan);
+            letter-spacing: 0.5px;
+        }
+
+        .turn-street {
+            font-size: 15px;
+            font-weight: 900;
+            color: #ffffff;
+        }
+
+        /* Voice Status Pill */
+        .voice-status-pill {
+            position: absolute;
+            top: 16px;
+            right: 20px;
+            background: var(--card-bg);
+            backdrop-filter: blur(14px);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 10px 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 50;
+            font-size: 13px;
+            font-weight: 800;
+            color: #ffffff;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Speedometer Widget */
+        .speedo-hud {
+            position: absolute;
+            bottom: 18px;
+            right: 22px;
+            background: var(--card-bg);
+            backdrop-filter: blur(14px);
+            border: 1.5px solid var(--card-border);
+            border-radius: 16px;
+            padding: 12px 22px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+            z-index: 50;
+        }
+
+        .speed-val {
+            font-family: 'Consolas', monospace;
+            font-size: 36px;
+            font-weight: 900;
+            color: #ffffff;
+            line-height: 1;
+        }
+
+        .speed-unit {
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--accent-cyan);
+            margin-top: 3px;
+            letter-spacing: 1px;
+        }
+
+        /* Non-intrusive AI Subtitles Top Bar */
+        .ai-subtitle-bar {
+            position: absolute;
+            top: 76px;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 820px;
+            background: rgba(14, 20, 34, 0.95);
+            backdrop-filter: blur(16px);
+            border: 1.5px solid rgba(56, 189, 248, 0.5);
+            border-radius: 30px;
+            padding: 8px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(56, 189, 248, 0.3);
+            z-index: 60;
+            animation: subFade 0.3s ease;
+        }
+
+        @keyframes subFade {
+            0% { opacity: 0; transform: translate(-50%, -10px); }
+            100% { opacity: 1; transform: translate(-50%, 0); }
+        }
+
+        .ai-sub-dot {
+            width: 10px;
+            height: 10px;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--accent-cyan);
+            animation: pulseRec 1.2s infinite alternate;
+        }
+
+        .ai-sub-text {
+            font-size: 14px;
+            font-weight: 800;
+            color: #ffffff;
+        }
+
+        /* Bottom Status Bar */
+        .bottom-bar {
+            height: 54px;
+            background: rgba(10, 15, 26, 0.95);
+            backdrop-filter: blur(12px);
+            border-top: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 50;
+            flex-shrink: 0;
+        }
+
+        .fare-meter {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+        }
+
+        .fm-lbl {
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--text-muted);
+        }
+
+        .fm-val {
+            font-family: 'Consolas', monospace;
+            font-size: 24px;
+            font-weight: 900;
+            color: #ffffff;
+        }
+
+        .status-msg {
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--accent-green);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Top Header -->
+        <div class="top-bar">
+            <div class="brand-box">
+                <div class="live-dot"></div>
+                <div>VIVANITE <span class="accent">AUTOPILOT 3D VISION</span></div>
+            </div>
+            <div class="header-pills">
+                <span class="pill green">● FSD ONLINE</span>
+                <span class="pill cyan">{{ streetName }}</span>
+                <span class="pill">SESLİ ASİSTAN</span>
+            </div>
+        </div>
+
+        <!-- 3D FSD Road Viewport -->
+        <div class="fsd-viewport">
+            <!-- Turn-by-turn banner -->
+            <div class="turn-banner">
+                <div class="turn-icon">{{ turnIcon }}</div>
+                <div class="turn-info">
+                    <span class="turn-dist">{{ turnNotice }}</span>
+                    <span class="turn-street">{{ streetName }}</span>
+                </div>
+            </div>
+
+            <!-- Voice Status Indicator -->
+            <div class="voice-status-pill">
+                <span>🎙️</span>
+                <span>NİKO AKTİF [N]</span>
+            </div>
+
+            <!-- Non-intrusive AI Subtitles Bar -->
+            <div class="ai-subtitle-bar" v-if="aiSpeaking">
+                <div class="ai-sub-dot"></div>
+                <span class="ai-sub-text">🎙️ {{ driverName }}: "{{ speechText }}"</span>
+            </div>
+
+            <!-- 3D Canvas Layer -->
+            <canvas id="road-3d-canvas" width="1024" height="468"></canvas>
+
+            <!-- Speedometer HUD -->
+            <div class="speedo-hud">
+                <span class="speed-val">{{ speedKMH }}</span>
+                <span class="speed-unit">KM/H</span>
+            </div>
+        </div>
+
+        <!-- Bottom Telemetry Bar -->
+        <div class="bottom-bar">
+            <div class="fare-meter">
+                <span class="fm-lbl">ÜCRET:</span>
+                <span class="fm-val">${{ liveFare }}</span>
+                <span style="color: #475569; font-size: 22px; margin: 0 6px;">•</span>
+                <span class="fm-lbl">MESAFE:</span>
+                <span class="fm-val">{{ liveDistance }} KM</span>
+            </div>
+
+            <div class="status-msg">
+                <span>●</span>
+                <span>Otonom Sürüş Devrede</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const speedKMH = ref(0);
+                const streetName = ref('LOS SANTOS');
+                const liveFare = ref('20.00');
+                const liveDistance = ref('0.00');
+                const turnIcon = ref('▲');
+                const turnNotice = ref('ROTADA DÜZ DEVAM EDİN');
+
+                // AI Speech Subtitle
+                const aiSpeaking = ref(false);
+                const speechText = ref('');
+                const driverName = ref('Niko Bellic');
+                let speechTimer = null;
+
+                let carSteer = 0;
+                let isDriving = true;
+                let nearbyVehs = [];
+
+                const triggerAISpeech = (text) => {
+                    speechText.value = text;
+                    aiSpeaking.value = true;
+
+                    if (speechTimer) clearTimeout(speechTimer);
+                    speechTimer = setTimeout(() => {
+                        aiSpeaking.value = false;
+                    }, 6000);
+                };
+
+                // PURE TESLA AUTOPILOT FSD 3D ROAD CANVAS ENGINE
+                const init3DRoadCanvas = () => {
+                    const canvas = document.getElementById('road-3d-canvas');
+                    if (!canvas) return;
+                    const ctx = canvas.getContext('2d');
+
+                    let scrollOffset = 0;
+
+                    const render = () => {
+                        const w = canvas.width;
+                        const h = canvas.height;
+                        ctx.clearRect(0, 0, w, h);
+
+                        // 1. Cyber Midnight Background
+                        ctx.fillStyle = '#050811';
+                        ctx.fillRect(0, 0, w, h);
+
+                        // 2. Horizon Glow & Perspective Sky
+                        const horizonY = h * 0.18;
+                        const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
+                        skyGrad.addColorStop(0, '#020409');
+                        skyGrad.addColorStop(1, '#0b1426');
+                        ctx.fillStyle = skyGrad;
+                        ctx.fillRect(0, 0, w, horizonY);
+
+                        // Horizon soft glowing line
+                        ctx.strokeStyle = 'rgba(56, 189, 248, 0.3)';
+                        ctx.lineWidth = 1.5;
+                        ctx.beginPath();
+                        ctx.moveTo(0, horizonY);
+                        ctx.lineTo(w, horizonY);
+                        ctx.stroke();
+
+                        // 3. Perspective Highway Coordinates
+                        const centerX = w / 2;
+                        const bottomY = h;
+                        const roadBottomW = 440;
+                        const roadTopW = 100;
+
+                        const steerOffset = carSteer * 1.5;
+
+                        const topL = { x: centerX - roadTopW / 2 + steerOffset * 0.3, y: horizonY };
+                        const topR = { x: centerX + roadTopW / 2 + steerOffset * 0.3, y: horizonY };
+                        const botL = { x: centerX - roadBottomW / 2, y: bottomY };
+                        const botR = { x: centerX + roadBottomW / 2, y: bottomY };
+
+                        // 4. Subtle LiDAR Floor Grid Lines (Perspective matrix)
+                        ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)';
+                        ctx.lineWidth = 1;
+
+                        const gridStep = 40;
+                        const gOffset = scrollOffset % gridStep;
+                        for (let y = horizonY + gOffset; y < bottomY; y += gridStep) {
+                            const p = (y - horizonY) / (bottomY - horizonY);
+                            const leftRoadX = topL.x + (botL.x - topL.x) * p;
+                            const rightRoadX = topR.x + (botR.x - topR.x) * p;
+
+                            ctx.beginPath();
+                            ctx.moveTo(0, y);
+                            ctx.lineTo(leftRoadX - 5, y);
+                            ctx.stroke();
+
+                            ctx.beginPath();
+                            ctx.moveTo(rightRoadX + 5, y);
+                            ctx.lineTo(w, y);
+                            ctx.stroke();
+                        }
+
+                        // 5. Clean Solid Asphalt Road
+                        ctx.fillStyle = '#0c1322';
+                        ctx.beginPath();
+                        ctx.moveTo(botL.x, botL.y);
+                        ctx.lineTo(topL.x, topL.y);
+                        ctx.lineTo(topR.x, topR.y);
+                        ctx.lineTo(botR.x, botR.y);
+                        ctx.closePath();
+                        ctx.fill();
+
+                        // 6. Glowing Neon Road Edge Borders (Curbs)
+                        ctx.strokeStyle = '#38bdf8';
+                        ctx.lineWidth = 3.5;
+                        ctx.shadowColor = '#38bdf8';
+                        ctx.shadowBlur = 12;
+
+                        // Left border
+                        ctx.beginPath();
+                        ctx.moveTo(botL.x, botL.y);
+                        ctx.lineTo(topL.x, topL.y);
+                        ctx.stroke();
+
+                        // Right border
+                        ctx.beginPath();
+                        ctx.moveTo(botR.x, botR.y);
+                        ctx.lineTo(topR.x, topR.y);
+                        ctx.stroke();
+                        ctx.shadowBlur = 0;
+
+                        // 7. Center Dashed Lane Divider (Clean Tesla FSD Scrolling Markings)
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = 3.5;
+                        ctx.setLineDash([26, 26]);
+                        ctx.lineDashOffset = -scrollOffset;
+                        ctx.beginPath();
+                        ctx.moveTo(centerX, bottomY);
+                        ctx.lineTo(centerX + steerOffset * 0.3, horizonY);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+
+                        // 8. Dynamic Forward LiDAR Radar Waves
+                        const radarProg = ((Date.now() / 12) % 100) / 100;
+                        const arcY = bottomY - 95 - (radarProg * 140);
+                        const arcW = 60 + (radarProg * 90);
+                        ctx.strokeStyle = `rgba(56, 189, 248, ${0.7 * (1 - radarProg)})`;
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.ellipse(centerX, arcY, arcW, arcW * 0.35, 0, Math.PI, 0);
+                        ctx.stroke();
+
+                        // 9. Surrounding Traffic Radar Vehicles
+                        if (nearbyVehs && nearbyVehs.length > 0) {
+                            for (const car of nearbyVehs) {
+                                const relDist = car.dist || 20;
+                                if (relDist < 50) {
+                                    const cProg = 1.0 - (relDist / 50.0);
+                                    const cY = bottomY - 100 - (cProg * 200);
+                                    const cX = centerX + (car.x * 2.5);
+                                    const cScale = 0.5 + (cProg * 0.5);
+
+                                    ctx.strokeStyle = '#38bdf8';
+                                    ctx.fillStyle = 'rgba(56, 189, 248, 0.2)';
+                                    ctx.lineWidth = 1.5;
+                                    ctx.strokeRect(cX - 18 * cScale, cY - 28 * cScale, 36 * cScale, 56 * cScale);
+                                    ctx.fillRect(cX - 18 * cScale, cY - 28 * cScale, 36 * cScale, 56 * cScale);
+                                }
+                            }
+                        }
+
+                        // 10. Autonomous Ego Vehicle (High-Detail Tesla Cyber Sedan)
+                        const egoX = centerX;
+                        const egoY = bottomY - 75;
+
+                        ctx.save();
+                        ctx.translate(egoX, egoY);
+
+                        // Cyan Underglow
+                        ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+                        ctx.shadowColor = '#38bdf8';
+                        ctx.shadowBlur = 32;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, 44, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
+
+                        // Headlight Beams Casting Ahead
+                        const beamGrad = ctx.createLinearGradient(0, -40, 0, -180);
+                        beamGrad.addColorStop(0, 'rgba(56, 189, 248, 0.45)');
+                        beamGrad.addColorStop(1, 'transparent');
+                        ctx.fillStyle = beamGrad;
+                        ctx.beginPath();
+                        ctx.moveTo(-18, -40);
+                        ctx.lineTo(-48, -180);
+                        ctx.lineTo(48, -180);
+                        ctx.lineTo(18, -40);
+                        ctx.closePath();
+                        ctx.fill();
+
+                        // 4 Tires (Left & Right)
+                        ctx.fillStyle = '#0f172a';
+                        ctx.fillRect(-26, -30, 6, 16); // Front Left
+                        ctx.fillRect(20, -30, 6, 16);  // Front Right
+                        ctx.fillRect(-26, 14, 6, 16);  // Rear Left
+                        ctx.fillRect(20, 14, 6, 16);   // Rear Right
+
+                        // Main Aerodynamic Cyber Body
+                        const eW = 44;
+                        const eH = 78;
+
+                        const carGrad = ctx.createLinearGradient(-eW / 2, 0, eW / 2, 0);
+                        carGrad.addColorStop(0, '#0284c7');
+                        carGrad.addColorStop(0.5, '#38bdf8');
+                        carGrad.addColorStop(1, '#0284c7');
+                        ctx.fillStyle = carGrad;
+                        ctx.strokeStyle = '#38bdf8';
+                        ctx.lineWidth = 2.5;
+
+                        // Rounded Cyber Body
+                        ctx.beginPath();
+                        ctx.roundRect(-eW / 2, -eH / 2, eW, eH, 12);
+                        ctx.fill();
+                        ctx.stroke();
+
+                        // Tinted Panoramic Glass Roof
+                        ctx.fillStyle = '#060d1d';
+                        ctx.beginPath();
+                        ctx.roundRect(-eW / 2 + 5, -eH / 2 + 12, eW - 10, 46, 8);
+                        ctx.fill();
+
+                        // Roof LiDAR Sensor Puck
+                        ctx.fillStyle = '#38bdf8';
+                        ctx.shadowColor = '#38bdf8';
+                        ctx.shadowBlur = 10;
+                        ctx.beginPath();
+                        ctx.arc(0, -eH / 2 + 22, 6, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
+
+                        // Front LED Cyber Light Strip (Cyan)
+                        ctx.fillStyle = '#e0f2fe';
+                        ctx.shadowColor = '#38bdf8';
+                        ctx.shadowBlur = 12;
+                        ctx.fillRect(-eW / 2 + 6, -eH / 2 + 2, eW - 12, 3);
+
+                        // Rear LED Tail Lights (Red Glow)
+                        ctx.fillStyle = '#ef4444';
+                        ctx.shadowColor = '#ef4444';
+                        ctx.shadowBlur = 12;
+                        ctx.fillRect(-eW / 2 + 5, eH / 2 - 4, 12, 3);
+                        ctx.fillRect(eW / 2 - 17, eH / 2 - 4, 12, 3);
+                        ctx.shadowBlur = 0;
+
+                        ctx.restore();
+
+                        if (isDriving) {
+                            scrollOffset += 4.5;
+                        }
+
+                        requestAnimationFrame(render);
+                    };
+
+                    requestAnimationFrame(render);
+                };
+
+                onMounted(() => {
+                    init3DRoadCanvas();
+
+                    window.addEventListener('message', (event) => {
+                        const item = event.data;
+                        if (!item) return;
+
+                        if (item.action === 'AI_DRIVER_SPEAK' && item.data) {
+                            if (item.data.driverName) driverName.value = item.data.driverName;
+                            triggerAISpeech(item.data.text || '');
+                        } else if (item.action === 'UPDATE_TAXIMETER' && item.data) {
+                            if (item.data.fare) liveFare.value = item.data.fare;
+                            if (item.data.distanceKM) liveDistance.value = item.data.distanceKM;
+                        } else if (item.action === 'UPDATE_TELEMETRY' && item.data) {
+                            speedKMH.value = Math.round(item.data.speedKMH || 0);
+                            isDriving = (item.data.speedKMH || 0) > 1.5;
+                            if (item.data.street) streetName.value = item.data.street.toUpperCase();
+                            if (item.data.steeringAngle !== undefined) carSteer = item.data.steeringAngle;
+                            if (item.data.nearbyVehicles) nearbyVehs = item.data.nearbyVehicles;
+
+                            if (carSteer < -8.0) {
+                                turnIcon.value = '↰';
+                                turnNotice.value = 'SOLA DÖNÜŞ YAPILIYOR';
+                            } else if (carSteer > 8.0) {
+                                turnIcon.value = '↱';
+                                turnNotice.value = 'SAĞA DÖNÜŞ YAPILIYOR';
+                            } else {
+                                turnIcon.value = '▲';
+                                turnNotice.value = 'ROTADA DÜZ DEVAM EDİN';
+                            }
+                        }
+                    });
+                });
+
+                return {
+                    speedKMH,
+                    streetName,
+                    liveFare,
+                    liveDistance,
+                    turnIcon,
+                    turnNotice,
+                    aiSpeaking,
+                    speechText,
+                    driverName
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
